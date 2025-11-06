@@ -4,6 +4,9 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
+// Set environment mode explicitly
+app.set("env", process.env.NODE_ENV || "development");
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
@@ -47,24 +50,28 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  try {
+    const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
-  });
+      log(`Error: ${message}`, "ERROR");
+      res.status(status).json({ message });
+    });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    const env = app.get("env");
+    log(`Starting server in ${env} mode`);
+    
+    if (env === "development") {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
@@ -83,7 +90,19 @@ app.use((req, res, next) => {
   if (process.platform !== 'win32' && isProduction) {
     listenOptions.reusePort = true;
   }
-  server.listen(listenOptions, () => {
-    log(`serving on ${host}:${port} (${isProduction ? 'production' : 'development'})`);
-  });
+    server.listen(listenOptions, () => {
+      log(`serving on ${host}:${port} (${isProduction ? 'production' : 'development'})`);
+    });
+
+    server.on("error", (err: any) => {
+      log(`Server error: ${err.message}`, "ERROR");
+      if (err.code === "EADDRINUSE") {
+        log(`Port ${port} is already in use`, "ERROR");
+      }
+      process.exit(1);
+    });
+  } catch (error) {
+    log(`Failed to start server: ${error}`, "ERROR");
+    process.exit(1);
+  }
 })();

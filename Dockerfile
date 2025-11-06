@@ -37,6 +37,9 @@ EXPOSE 5000
 ENV NODE_ENV=production
 ENV PORT=5000
 
+# Verify build output exists
+RUN ls -la /app/dist/public || (echo "Build output not found!" && exit 1)
+
 # Start the application
 CMD ["npm", "start"]
 
