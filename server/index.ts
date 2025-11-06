@@ -71,17 +71,19 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  // Windows doesn't support 0.0.0.0, use localhost instead
-  const host = process.platform === 'win32' ? 'localhost' : '0.0.0.0';
+  // In production, always use 0.0.0.0 to listen on all interfaces (required for Docker/Coolify)
+  // On Windows in development, use localhost
+  const isProduction = app.get("env") === "production";
+  const host = isProduction ? '0.0.0.0' : (process.platform === 'win32' ? 'localhost' : '0.0.0.0');
   // Windows doesn't support reusePort option
   const listenOptions: any = {
     port,
     host,
   };
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' && isProduction) {
     listenOptions.reusePort = true;
   }
   server.listen(listenOptions, () => {
-    log(`serving on port ${port}`);
+    log(`serving on ${host}:${port} (${isProduction ? 'production' : 'development'})`);
   });
 })();
