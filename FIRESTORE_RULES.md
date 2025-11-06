@@ -28,6 +28,9 @@ service cloud.firestore {
       allow read, write: if isOwner(resource.data.userId);
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Allow public read by accessCode (for customer portal - query by accessCode)
+      // Note: This allows customers to read their own data using their accessCode
+      allow read: if resource.data.accessCode != null;
     }
     
     // Credits collection
@@ -36,11 +39,37 @@ service cloud.firestore {
       allow read, write: if isOwner(resource.data.userId);
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Allow public read if customer has accessCode (for customer portal)
+      // Note: This allows customers to read their own credit using their customerId
+      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) && 
+                     get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
     
     // Payments collection
     match /payments/{paymentId} {
       // Users can only read/write their own payments
+      allow read, write: if isOwner(resource.data.userId);
+      // Allow create if the userId matches the authenticated user
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Allow public read if customer has accessCode (for customer portal)
+      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) && 
+                     get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
+    }
+    
+    // Credit Increases collection
+    match /creditIncreases/{creditIncreaseId} {
+      // Users can only read/write their own credit increases
+      allow read, write: if isOwner(resource.data.userId);
+      // Allow create if the userId matches the authenticated user
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Allow public read if customer has accessCode (for customer portal)
+      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) && 
+                     get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
+    }
+    
+    // Stores collection
+    match /stores/{storeId} {
+      // Users can only read/write their own store
       allow read, write: if isOwner(resource.data.userId);
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;

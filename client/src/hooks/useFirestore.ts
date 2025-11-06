@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { Customer, Credit, Payment } from "@shared/schema";
+import { Customer, Credit, Payment, Store } from "@shared/schema";
 import { useEffect } from "react";
 
 // Real-time Firestore query with TanStack Query integration
@@ -191,6 +191,92 @@ export function useCreatePayment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       queryClient.invalidateQueries({ queryKey: ["credits"] });
+    },
+  });
+}
+
+// Store hooks
+export function useStore() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Get store for the current user
+  useEffect(() => {
+    if (!user) {
+      queryClient.setQueryData(["store"], undefined);
+      return;
+    }
+
+    const q = query(
+      collection(db, "stores"),
+      where("userId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (snapshot.empty) {
+          queryClient.setQueryData(["store"], undefined);
+        } else {
+          const storeData = {
+            id: snapshot.docs[0].id,
+            ...snapshot.docs[0].data()
+          } as Store;
+          queryClient.setQueryData(["store"], storeData);
+        }
+      },
+      (err) => {
+        console.error("Error fetching store:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user, queryClient]);
+
+  return useQuery<Store | undefined>({
+    queryKey: ["store"],
+    queryFn: async () => {
+      return queryClient.getQueryData<Store | undefined>(["store"]);
+    },
+    initialData: undefined,
+    staleTime: Infinity,
+  });
+}
+
+export function useCreateStore() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (storeData: Omit<Store, "id" | "createdAt" | "updatedAt">) => {
+      if (!user) throw new Error("User not authenticated");
+      
+      const docRef = await addDoc(collection(db, "stores"), {
+        ...storeData,
+        userId: user.uid,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      return docRef.id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store"] });
+    },
+  });
+}
+
+export function useUpdateStore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Store> }) => {
+      await updateDoc(doc(db, "stores", id), {
+        ...data,
+        updatedAt: Date.now(),
+      } as DocumentData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["store"] });
     },
   });
 }
