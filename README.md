@@ -2,6 +2,71 @@
 
 A modern, professional credit management application built with React, Firebase, and Tailwind CSS.
 
+## How to Run This Project
+
+### Quick Start (Development Mode)
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Set up Firebase credentials** (see Firebase Setup section below)
+
+3. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+   
+   The application will start on `http://localhost:5000` (or the port specified in your environment)
+
+### Available Scripts
+
+- **`npm run dev`** - Start the development server with hot reload
+  - Runs: `NODE_ENV=development tsx server/index.ts`
+  - Best for: Development and testing
+  
+- **`npm run build`** - Build the project for production
+  - Compiles TypeScript, bundles frontend with Vite, and builds server with esbuild
+  - Best for: Creating production-ready artifacts
+  
+- **`npm run start`** - Start the production server
+  - Runs: `NODE_ENV=production node dist/index.js`
+  - Requires: Run `npm run build` first
+  - Best for: Production deployment
+
+- **`npm run check`** - Type-check the TypeScript code
+  - Runs: `tsc`
+  - Best for: Verifying type safety
+
+- **`npm run db:push`** - Push database schema changes
+  - Runs: `drizzle-kit push`
+  - Best for: Database migrations
+
+### Running on Replit
+
+If you're using Replit, the project is configured to run automatically:
+- The `.replit` file is configured to run `npm run dev` when you click "Run"
+- The server will start on port 5000
+- Environment variables can be set in Replit Secrets
+
+### Running Locally (Windows)
+
+The project is now configured with `cross-env` for Windows compatibility. Simply run:
+
+```bash
+npm install  # Installs cross-env automatically
+npm run dev  # Works on Windows, macOS, and Linux
+```
+
+The scripts use `cross-env` which handles environment variables across all platforms automatically.
+
+### Port Configuration
+
+- Default port: **5000**
+- Can be configured via `PORT` environment variable
+- The `.replit` file maps port 5000 to external port 80 for Replit deployments
+
 ## Features
 
 - 🔐 **Secure Authentication** - Email/password and Google sign-in with Firebase Auth

@@ -14,10 +14,7 @@ export function calculateCreditStatus(credit: Credit): Credit["status"] {
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
+  return `${amount.toLocaleString()} DT`;
 }
 
 export function calculatePaymentProgress(credit: Credit): number {

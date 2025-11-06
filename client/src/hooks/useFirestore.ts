@@ -8,11 +8,13 @@ import {
   updateDoc, 
   deleteDoc, 
   doc,
-  DocumentData 
+  DocumentData,
+  getDocs
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { Customer, Credit, Payment, Store } from "@shared/schema";
+import { Customer, Credit, Payment, Store, CreditIncrease } from "@shared/schema";
+import { generateAccessCode } from "@/lib/customerUtils";
 import { useEffect } from "react";
 
 // Real-time Firestore query with TanStack Query integration
@@ -70,6 +72,34 @@ export function useCustomers() {
   return useFirestoreQuery<Customer>("customers", ["customers"]);
 }
 
+// Get customer by access code (for customer portal)
+export function useCustomerByAccessCode(accessCode: string | null) {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ["customer", "accessCode", accessCode],
+    queryFn: async () => {
+      if (!accessCode) return null;
+      
+      const q = query(
+        collection(db, "customers"),
+        where("accessCode", "==", accessCode)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) return null;
+      
+      const customerDoc = querySnapshot.docs[0];
+      return {
+        id: customerDoc.id,
+        ...customerDoc.data(),
+      } as Customer;
+    },
+    enabled: !!accessCode,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
 export function useCreateCustomer() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -78,8 +108,12 @@ export function useCreateCustomer() {
     mutationFn: async (customerData: Omit<Customer, "id" | "createdAt">) => {
       if (!user) throw new Error("User not authenticated");
       
+      // Generate access code if not provided
+      const accessCode = customerData.accessCode || generateAccessCode();
+      
       const docRef = await addDoc(collection(db, "customers"), {
         ...customerData,
+        accessCode,
         userId: user.uid,
         createdAt: Date.now(),
       });
@@ -179,7 +213,7 @@ export function useCreatePayment() {
       if (!user) throw new Error("User not authenticated");
       
       // Create payment record
-      await addDoc(collection(db, "payments"), {
+      const paymentRef = await addDoc(collection(db, "payments"), {
         ...paymentData,
         userId: user.uid,
         createdAt: Date.now(),
@@ -187,6 +221,8 @@ export function useCreatePayment() {
 
       // Update credit
       await updateDoc(doc(db, "credits", creditUpdate.id), creditUpdate.data as DocumentData);
+
+      return paymentRef.id;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payments"] });
@@ -195,51 +231,139 @@ export function useCreatePayment() {
   });
 }
 
-// Store hooks
-export function useStore() {
+// Credit Increase hooks
+export function useCreditIncreases() {
+  return useFirestoreQuery<CreditIncrease>("creditIncreases", ["creditIncreases"]);
+}
+
+// Public hooks for customer portal (no authentication required)
+export function usePublicCredits(customerId: string | null) {
+  return useQuery<Credit[]>({
+    queryKey: ["publicCredits", customerId],
+    queryFn: async () => {
+      if (!customerId) return [];
+      
+      const q = query(
+        collection(db, "credits"),
+        where("customerId", "==", customerId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as Credit));
+    },
+    enabled: !!customerId,
+    initialData: [],
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+export function usePublicPayments(customerId: string | null) {
+  return useQuery<Payment[]>({
+    queryKey: ["publicPayments", customerId],
+    queryFn: async () => {
+      if (!customerId) return [];
+      
+      const q = query(
+        collection(db, "payments"),
+        where("customerId", "==", customerId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as Payment));
+    },
+    enabled: !!customerId,
+    initialData: [],
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+export function usePublicCreditIncreases(customerId: string | null) {
+  return useQuery<CreditIncrease[]>({
+    queryKey: ["publicCreditIncreases", customerId],
+    queryFn: async () => {
+      if (!customerId) return [];
+      
+      const q = query(
+        collection(db, "creditIncreases"),
+        where("customerId", "==", customerId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as CreditIncrease));
+    },
+    enabled: !!customerId,
+    initialData: [],
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+export function useCreateCreditIncrease() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Get store for the current user
-  useEffect(() => {
-    if (!user) {
-      queryClient.setQueryData(["store"], undefined);
-      return;
-    }
+  return useMutation({
+    mutationFn: async ({ 
+      creditIncreaseData, 
+      creditUpdate 
+    }: { 
+      creditIncreaseData: Omit<CreditIncrease, "id" | "createdAt">; 
+      creditUpdate: { id: string; data: Partial<Credit> };
+    }) => {
+      if (!user) throw new Error("User not authenticated");
+      
+      // Create credit increase record
+      await addDoc(collection(db, "creditIncreases"), {
+        ...creditIncreaseData,
+        userId: user.uid,
+        createdAt: Date.now(),
+      });
 
-    const q = query(
-      collection(db, "stores"),
-      where("userId", "==", user.uid)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        if (snapshot.empty) {
-          queryClient.setQueryData(["store"], undefined);
-        } else {
-          const storeData = {
-            id: snapshot.docs[0].id,
-            ...snapshot.docs[0].data()
-          } as Store;
-          queryClient.setQueryData(["store"], storeData);
-        }
-      },
-      (err) => {
-        console.error("Error fetching store:", err);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user, queryClient]);
-
-  return useQuery<Store | undefined>({
-    queryKey: ["store"],
-    queryFn: async () => {
-      return queryClient.getQueryData<Store | undefined>(["store"]);
+      // Update credit
+      await updateDoc(doc(db, "credits", creditUpdate.id), creditUpdate.data as DocumentData);
     },
-    initialData: undefined,
-    staleTime: Infinity,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["creditIncreases"] });
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
+    },
+  });
+}
+
+// Store hooks
+export function useStore() {
+  const { user } = useAuth();
+
+  return useQuery<Store | null>({
+    queryKey: ["store", user?.uid],
+    queryFn: async () => {
+      if (!user) return null;
+
+      const q = query(
+        collection(db, "stores"),
+        where("userId", "==", user.uid)
+      );
+
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) {
+        return null;
+      }
+
+      const storeDoc = querySnapshot.docs[0];
+      return {
+        id: storeDoc.id,
+        ...storeDoc.data(),
+      } as Store;
+    },
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
 

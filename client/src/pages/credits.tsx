@@ -96,12 +96,38 @@ export default function Credits() {
     },
   });
 
+  // Group credits by customerId and keep only one credit per customer (the most recent one)
+  const uniqueCreditsByCustomer = useMemo(() => {
+    const creditMap = new Map<string, Credit>();
+    
+    // Sort credits by creation date (newest first) to keep the most recent one
+    const sortedCredits = [...credits].sort((a, b) => b.createdAt - a.createdAt);
+    
+    sortedCredits.forEach(credit => {
+      if (!creditMap.has(credit.customerId)) {
+        creditMap.set(credit.customerId, credit);
+      }
+    });
+    
+    return Array.from(creditMap.values());
+  }, [credits]);
+
+  // Get list of customer IDs that already have a credit
+  const customersWithCredit = useMemo(() => {
+    return new Set(uniqueCreditsByCustomer.map(credit => credit.customerId));
+  }, [uniqueCreditsByCustomer]);
+
+  // Filter customers to show only those without a credit
+  const availableCustomers = useMemo(() => {
+    return customers.filter(customer => !customersWithCredit.has(customer.id));
+  }, [customers, customersWithCredit]);
+
   const filteredCredits = useMemo(() => {
-    return credits.filter(credit =>
+    return uniqueCreditsByCustomer.filter(credit =>
       credit.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       credit.status.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [credits, searchTerm]);
+  }, [uniqueCreditsByCustomer, searchTerm]);
 
   const loading = creditsLoading || customersLoading;
 
@@ -119,6 +145,17 @@ export default function Credits() {
         return;
       }
 
+      // Check if customer already has a credit
+      const existingCredit = credits.find(c => c.customerId === values.customerId);
+      if (existingCredit) {
+        toast({
+          title: t("credits.customerAlreadyHasCredit"),
+          description: t("credits.customerAlreadyHasCreditDesc"),
+          variant: "destructive",
+        });
+        return;
+      }
+
       await createCredit.mutateAsync({
         customerId: values.customerId,
         customerName: selectedCustomer.name,
@@ -128,8 +165,8 @@ export default function Credits() {
       });
       
       toast({
-        title: "Credit created",
-        description: "New credit has been created successfully.",
+        title: t("credits.creditCreated"),
+        description: t("credits.creditCreatedDesc"),
       });
 
       setDialogOpen(false);
@@ -458,11 +495,17 @@ export default function Credits() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {customers.map(customer => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
+                          {availableCustomers.length === 0 ? (
+                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                              {t("credits.noAvailableCustomers")}
+                            </div>
+                          ) : (
+                            availableCustomers.map(customer => (
+                              <SelectItem key={customer.id} value={customer.id}>
+                                {customer.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />

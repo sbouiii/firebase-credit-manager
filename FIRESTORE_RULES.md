@@ -11,17 +11,17 @@ To secure your Firebase Firestore database, apply the following security rules i
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // Helper function to check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     // Helper function to check if user owns the resource
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
+
     // Customers collection
     match /customers/{customerId} {
       // Users can only read/write their own customers
@@ -32,7 +32,7 @@ service cloud.firestore {
       // Note: This allows customers to read their own data using their accessCode
       allow read: if resource.data.accessCode != null;
     }
-    
+
     // Credits collection
     match /credits/{creditId} {
       // Users can only read/write their own credits
@@ -41,10 +41,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       // Allow public read if customer has accessCode (for customer portal)
       // Note: This allows customers to read their own credit using their customerId
-      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) && 
+      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) &&
                      get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
-    
+
     // Payments collection
     match /payments/{paymentId} {
       // Users can only read/write their own payments
@@ -52,10 +52,10 @@ service cloud.firestore {
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       // Allow public read if customer has accessCode (for customer portal)
-      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) && 
+      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) &&
                      get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
-    
+
     // Credit Increases collection
     match /creditIncreases/{creditIncreaseId} {
       // Users can only read/write their own credit increases
@@ -63,10 +63,10 @@ service cloud.firestore {
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       // Allow public read if customer has accessCode (for customer portal)
-      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) && 
+      allow read: if exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) &&
                      get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
-    
+
     // Stores collection
     match /stores/{storeId} {
       // Users can only read/write their own store
@@ -88,6 +88,7 @@ service cloud.firestore {
 ## Testing the Rules:
 
 After applying the rules, test them in the Firebase Console:
+
 1. Go to **Firestore Database** → **Rules** → **Rules Playground**
 2. Test read/write operations with different user IDs to ensure proper isolation
 

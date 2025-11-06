@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, UserCircle, Store, LogOut } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   Sidebar,
@@ -12,29 +12,41 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-
-const menuItems = [
-  {
-    title: "Dashboard",
-    url: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Customers",
-    url: "/customers",
-    icon: Users,
-  },
-  {
-    title: "Credits",
-    url: "/credits",
-    icon: CreditCard,
-  },
-];
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { logout, user } = useAuth();
+  const { t } = useLanguage();
+
+  const menuItems = [
+    {
+      title: t("sidebar.dashboard"),
+      url: "/",
+      icon: LayoutDashboard,
+    },
+    {
+      title: t("sidebar.customers"),
+      url: "/customers",
+      icon: Users,
+    },
+    {
+      title: t("sidebar.credits"),
+      url: "/credits",
+      icon: CreditCard,
+    },
+    {
+      title: t("sidebar.profile"),
+      url: "/profile",
+      icon: UserCircle,
+    },
+    {
+      title: t("sidebar.store"),
+      url: "/store",
+      icon: Store,
+    },
+  ];
 
   return (
     <Sidebar>
@@ -76,7 +88,7 @@ export function AppSidebar() {
             className="w-full justify-start"
           >
             <LogOut className="w-4 h-4 mr-2" />
-            Logout
+            {t("sidebar.logout")}
           </Button>
         </div>
       </SidebarFooter>

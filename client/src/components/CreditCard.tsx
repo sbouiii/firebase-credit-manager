@@ -1,20 +1,26 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Credit } from "@shared/schema";
 import { format } from "date-fns";
-import { Calendar, DollarSign, Percent } from "lucide-react";
+import { Calendar, Plus, History, Receipt, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { calculateCreditStatus } from "@/lib/creditUtils";
 
 interface CreditCardProps {
   credit: Credit;
   onRecordPayment: (credit: Credit) => void;
   onViewHistory: (credit: Credit) => void;
+  onIncreaseCredit?: (credit: Credit) => void;
 }
 
-export function CreditCard({ credit, onRecordPayment, onViewHistory }: CreditCardProps) {
-  const paymentProgress = (credit.paidAmount / credit.amount) * 100;
+export function CreditCard({ credit, onRecordPayment, onViewHistory, onIncreaseCredit }: CreditCardProps) {
+  const { t } = useLanguage();
+  
+  // Calculate status based on remainingAmount and dueDate (ignore stored status)
+  const effectiveStatus = calculateCreditStatus(credit);
+  const isPaid = effectiveStatus === "paid";
   
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -43,73 +49,62 @@ export function CreditCard({ credit, onRecordPayment, onViewHistory }: CreditCar
           <CardTitle className="text-lg font-medium">
             {credit.customerName}
           </CardTitle>
-          <Badge variant={getStatusVariant(credit.status)} data-testid={`badge-status-${credit.id}`}>
-            {getStatusLabel(credit.status)}
+          <Badge variant={getStatusVariant(effectiveStatus)} data-testid={`badge-status-${credit.id}`}>
+            {getStatusLabel(effectiveStatus)}
           </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Total Amount</div>
-              <div className="text-2xl font-bold font-mono flex items-center gap-1">
-                <DollarSign className="h-5 w-5" />
-                {credit.amount.toLocaleString()}
-              </div>
+          <div className="text-center">
+            <div className="text-sm text-muted-foreground mb-1">{t("credits.amount")}</div>
+            <div className="text-3xl font-bold font-mono text-destructive">
+              {credit.remainingAmount.toLocaleString()} DT
             </div>
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">Remaining</div>
-              <div className="text-2xl font-bold font-mono text-destructive flex items-center gap-1">
-                <DollarSign className="h-5 w-5" />
-                {credit.remainingAmount.toLocaleString()}
-              </div>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Payment Progress</span>
-              <span className="font-medium">{paymentProgress.toFixed(0)}%</span>
-            </div>
-            <Progress value={paymentProgress} className="h-2" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <div className="text-muted-foreground">Due Date</div>
-                <div className="font-medium">{format(credit.dueDate, "MMM dd, yyyy")}</div>
-              </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <div className="text-muted-foreground">{t("credits.dueDateLabel")}</div>
+              <div className="font-medium">{format(credit.dueDate, "MMM dd, yyyy")}</div>
             </div>
-            {credit.interestRate !== undefined && credit.interestRate > 0 && (
-              <div className="flex items-center gap-2">
-                <Percent className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="text-muted-foreground">Interest</div>
-                  <div className="font-medium">{credit.interestRate}%</div>
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
-        <CardFooter className="flex gap-2 justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewHistory(credit)}
-            data-testid={`button-view-history-${credit.id}`}
-          >
-            View History
-          </Button>
-          {credit.status !== "paid" && (
+        <CardFooter className="pt-4 border-t">
+          <div className="flex flex-wrap gap-2 w-full">
             <Button
+              variant="outline"
               size="sm"
-              onClick={() => onRecordPayment(credit)}
-              data-testid={`button-record-payment-${credit.id}`}
+              onClick={() => onViewHistory(credit)}
+              data-testid={`button-view-history-${credit.id}`}
+              className="flex-1 min-w-[140px]"
             >
-              Record Payment
+              <History className="h-4 w-4 mr-2" />
+              {t("credits.viewHistory")}
             </Button>
-          )}
+            {onIncreaseCredit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onIncreaseCredit(credit)}
+                data-testid={`button-increase-credit-${credit.id}`}
+                className="flex-1 min-w-[140px]"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                {t("credits.addCredit")}
+              </Button>
+            )}
+            {!isPaid && (
+              <Button
+                size="sm"
+                onClick={() => onRecordPayment(credit)}
+                data-testid={`button-record-payment-${credit.id}`}
+                className="flex-1 min-w-[140px]"
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                {t("credits.recordPayment")}
+              </Button>
+            )}
+          </div>
         </CardFooter>
       </Card>
     </motion.div>

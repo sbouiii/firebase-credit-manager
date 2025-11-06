@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Mail, Phone, MapPin, Share2, Copy, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { Customer, insertCustomerSchema } from "@shared/schema";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from "@/hooks/useFirestore";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const formSchema = insertCustomerSchema.extend({
   email: z.string().email().optional().or(z.literal("")),
@@ -26,7 +27,9 @@ type FormValues = z.infer<typeof formSchema>;
 export default function Customers() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { data: customers, loading } = useCustomers();
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
@@ -284,6 +287,33 @@ export default function Customers() {
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">{customer.address}</span>
+                    </div>
+                  )}
+                  {customer.accessCode && (
+                    <div className="flex items-center gap-2 text-sm pt-2 border-t">
+                      <span className="text-xs text-muted-foreground">{t("customers.accessCode")}:</span>
+                      <code className="font-mono text-xs bg-muted px-2 py-1 rounded">{customer.accessCode}</code>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => {
+                          const trackUrl = `${window.location.origin}/customer-track/${customer.accessCode}`;
+                          navigator.clipboard.writeText(trackUrl);
+                          setCopiedCode(customer.id);
+                          setTimeout(() => setCopiedCode(null), 2000);
+                          toast({
+                            title: t("customers.linkCopied"),
+                            description: t("customers.linkCopiedDesc"),
+                          });
+                        }}
+                      >
+                        {copiedCode === customer.id ? (
+                          <Check className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </Button>
                     </div>
                   )}
                   <div className="flex gap-2 pt-2">

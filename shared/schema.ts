@@ -7,6 +7,7 @@ export const customerSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
+  accessCode: z.string().optional(), // Unique access code for customer portal
   createdAt: z.number(),
   userId: z.string(),
 });
@@ -58,6 +59,22 @@ export const insertPaymentSchema = paymentSchema.omit({ id: true, createdAt: tru
 export type Payment = z.infer<typeof paymentSchema>;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
+// Credit Increase Schema
+export const creditIncreaseSchema = z.object({
+  id: z.string(),
+  creditId: z.string(),
+  customerId: z.string(),
+  amount: z.number(),
+  note: z.string().optional(),
+  createdAt: z.number(),
+  userId: z.string(),
+});
+
+export const insertCreditIncreaseSchema = creditIncreaseSchema.omit({ id: true, createdAt: true });
+
+export type CreditIncrease = z.infer<typeof creditIncreaseSchema>;
+export type InsertCreditIncrease = z.infer<typeof insertCreditIncreaseSchema>;
+
 // User Profile Schema (for Firebase auth users)
 export const userProfileSchema = z.object({
   uid: z.string(),
@@ -68,3 +85,18 @@ export const userProfileSchema = z.object({
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
+
+// Store Schema
+export const storeSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  logo: z.string().optional(),
+  userId: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+export const insertStoreSchema = storeSchema.omit({ id: true, createdAt: true, updatedAt: true });
+
+export type Store = z.infer<typeof storeSchema>;
+export type InsertStore = z.infer<typeof insertStoreSchema>;

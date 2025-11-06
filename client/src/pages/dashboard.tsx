@@ -6,61 +6,62 @@ import { DollarSign, TrendingUp, AlertCircle, Users } from "lucide-react";
 import { Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend } from "chart.js";
 import { Bar, Line } from "react-chartjs-2";
 import { motion } from "framer-motion";
-import { useCredits, useCustomers } from "@/hooks/useFirestore";
+import { useCredits, useCustomers, useStore } from "@/hooks/useFirestore";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
 
 export default function Dashboard() {
-  const { data: credits, loading: creditsLoading } = useCredits();
-  const { data: customers, loading: customersLoading } = useCustomers();
+  const { data: credits, isLoading: creditsLoading } = useCredits();
+  const { data: customers, isLoading: customersLoading } = useCustomers();
+  const { data: store, isLoading: storeLoading } = useStore();
+  const { t } = useLanguage();
 
-  const loading = creditsLoading || customersLoading;
+  const loading = creditsLoading || customersLoading || storeLoading;
 
   const stats = useMemo(() => {
     const totalCredits = credits.reduce((sum, c) => sum + c.amount, 0);
     const totalPaid = credits.reduce((sum, c) => sum + c.paidAmount, 0);
-    const overdueCredits = credits.filter(c => c.status === "overdue");
-    const totalOverdue = overdueCredits.reduce((sum, c) => sum + c.remainingAmount, 0);
+    const totalRemaining = credits.reduce((sum, c) => sum + c.remainingAmount, 0);
 
     return {
       totalCredits,
       totalPaid,
-      overdueCredits: overdueCredits.length,
-      totalOverdue,
+      totalRemaining,
       activeCustomers: customers.length,
     };
   }, [credits, customers]);
 
-  const chartData = {
+  const chartData = useMemo(() => ({
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     datasets: [
       {
-        label: "Credits Issued",
+        label: t("dashboard.creditsIssued"),
         data: [12000, 19000, 15000, 25000, 22000, 30000],
         backgroundColor: "hsl(var(--chart-1))",
         borderRadius: 4,
       },
       {
-        label: "Payments Received",
+        label: t("dashboard.paymentsReceived"),
         data: [8000, 15000, 12000, 20000, 18000, 25000],
         backgroundColor: "hsl(var(--chart-2))",
         borderRadius: 4,
       },
     ],
-  };
+  }), [t]);
 
-  const lineChartData = {
+  const lineChartData = useMemo(() => ({
     labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
     datasets: [
       {
-        label: "Outstanding Balance",
+        label: t("dashboard.outstandingBalance"),
         data: [45000, 42000, 38000, 35000],
         borderColor: "hsl(var(--chart-3))",
         backgroundColor: "hsl(var(--chart-3) / 0.1)",
         tension: 0.4,
       },
     ],
-  };
+  }), [t]);
 
   const chartOptions = {
     responsive: true,
@@ -127,35 +128,54 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
+        className="flex items-center justify-between"
       >
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your credit management</p>
+        <div>
+          <div className="flex items-center gap-3">
+            {store?.logo && (
+              <img
+                src={store.logo}
+                alt={store.name}
+                className="h-10 w-10 object-contain rounded"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            )}
+            <div>
+              <h1 className="text-3xl font-bold">
+                {store?.name || t("dashboard.title")}
+              </h1>
+              <p className="text-muted-foreground">{t("dashboard.overview")}</p>
+            </div>
+          </div>
+        </div>
       </motion.div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
-          title="Total Credits"
-          value={`$${stats.totalCredits.toLocaleString()}`}
+          title={t("dashboard.totalCredits")}
+          value={`${stats.totalCredits.toLocaleString()} DT`}
           icon={DollarSign}
-          description={`${credits.length} active credits`}
+          description={`${credits.length} ${t("dashboard.activeCredits")}`}
         />
         <StatsCard
-          title="Paid Amount"
-          value={`$${stats.totalPaid.toLocaleString()}`}
+          title={t("dashboard.paidAmount")}
+          value={`${stats.totalPaid.toLocaleString()} DT`}
           icon={TrendingUp}
-          description={`${((stats.totalPaid / stats.totalCredits) * 100 || 0).toFixed(1)}% collected`}
+          description={`${((stats.totalPaid / stats.totalCredits) * 100 || 0).toFixed(1)}% ${t("dashboard.collected")}`}
         />
         <StatsCard
-          title="Overdue Credits"
-          value={`$${stats.totalOverdue.toLocaleString()}`}
+          title={t("dashboard.totalRemaining")}
+          value={`${stats.totalRemaining.toLocaleString()} DT`}
           icon={AlertCircle}
-          description={`${stats.overdueCredits} credits overdue`}
+          description={t("dashboard.totalRemainingDesc")}
         />
         <StatsCard
-          title="Active Customers"
+          title={t("dashboard.activeCustomers")}
           value={stats.activeCustomers.toString()}
           icon={Users}
-          description="Total customers"
+          description={t("dashboard.totalCustomers")}
         />
       </div>
 
@@ -166,13 +186,13 @@ export default function Dashboard() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>Analytics</CardTitle>
+            <CardTitle>{t("dashboard.analytics")}</CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="monthly" className="space-y-4">
               <TabsList data-testid="tabs-analytics">
-                <TabsTrigger value="monthly" data-testid="tab-monthly">Monthly Overview</TabsTrigger>
-                <TabsTrigger value="trend" data-testid="tab-trend">Balance Trend</TabsTrigger>
+                <TabsTrigger value="monthly" data-testid="tab-monthly">{t("dashboard.monthlyOverview")}</TabsTrigger>
+                <TabsTrigger value="trend" data-testid="tab-trend">{t("dashboard.balanceTrend")}</TabsTrigger>
               </TabsList>
               <TabsContent value="monthly" className="h-[300px]" data-testid="chart-monthly">
                 <Bar data={chartData} options={chartOptions} />
