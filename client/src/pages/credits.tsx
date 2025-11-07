@@ -19,6 +19,8 @@ import { z } from "zod";
 import { useCredits, useCustomers, useCreateCredit, useCreatePayment, usePayments, useUpdateCredit, useCreditIncreases, useCreateCreditIncrease, useStore } from "@/hooks/useFirestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getRecommendedCreditAmount } from "@/lib/predictionUtils";
+import { Sparkles, Lightbulb } from "lucide-react";
 import { format } from "date-fns";
 import { PaymentReceipt } from "@/components/PaymentReceipt";
 
@@ -95,6 +97,13 @@ export default function Credits() {
       note: "",
     },
   });
+
+  // Get recommended credit amount for selected customer
+  const selectedCustomerId = creditForm.watch("customerId");
+  const recommendation = useMemo(() => {
+    if (!selectedCustomerId || !credits || !payments) return null;
+    return getRecommendedCreditAmount(selectedCustomerId, credits, payments);
+  }, [selectedCustomerId, credits, payments]);
 
   // Group credits by customerId and keep only one credit per customer (the most recent one)
   const uniqueCreditsByCustomer = useMemo(() => {
@@ -531,6 +540,53 @@ export default function Credits() {
                       <FormDescription>
                         {t("credits.amountDescription")}
                       </FormDescription>
+                      {recommendation && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-3 p-4 rounded-lg bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border border-blue-200 dark:border-blue-800"
+                        >
+                          <div className="flex items-start gap-3">
+                            <motion.div
+                              className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0"
+                              animate={{
+                                rotate: [0, 10, -10, 0],
+                                scale: [1, 1.1, 1],
+                              }}
+                              transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                              }}
+                            >
+                              <Lightbulb className="h-4 w-4 text-white" />
+                            </motion.div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-foreground mb-1">
+                                Recommandation IA
+                              </p>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {recommendation.reason}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => creditForm.setValue("amount", recommendation.recommended)}
+                                  className="text-xs"
+                                >
+                                  <Sparkles className="h-3 w-3 mr-1" />
+                                  Utiliser {recommendation.recommended.toFixed(0)} DT
+                                </Button>
+                                <span className="text-xs text-muted-foreground">
+                                  Max: {recommendation.max.toFixed(0)} DT
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

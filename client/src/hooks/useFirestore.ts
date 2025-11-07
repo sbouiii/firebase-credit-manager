@@ -79,24 +79,47 @@ export function useCustomerByAccessCode(accessCode: string | null) {
   return useQuery({
     queryKey: ["customer", "accessCode", accessCode],
     queryFn: async () => {
-      if (!accessCode) return null;
+      if (!accessCode) {
+        console.log("[useCustomerByAccessCode] No accessCode provided");
+        return null;
+      }
       
-      const q = query(
-        collection(db, "customers"),
-        where("accessCode", "==", accessCode)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) return null;
-      
-      const customerDoc = querySnapshot.docs[0];
-      return {
-        id: customerDoc.id,
-        ...customerDoc.data(),
-      } as Customer;
+      try {
+        console.log("[useCustomerByAccessCode] Fetching customer with accessCode:", accessCode);
+        const q = query(
+          collection(db, "customers"),
+          where("accessCode", "==", accessCode)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        console.log("[useCustomerByAccessCode] Query snapshot size:", querySnapshot.size);
+        
+        if (querySnapshot.empty) {
+          console.log("[useCustomerByAccessCode] ❌ No customer found with accessCode:", accessCode);
+          return null;
+        }
+        
+        const customerDoc = querySnapshot.docs[0];
+        const customerData = {
+          id: customerDoc.id,
+          ...customerDoc.data(),
+        } as Customer;
+        
+        console.log("[useCustomerByAccessCode] ✅ Customer found:", customerData);
+        console.log("[useCustomerByAccessCode] Customer ID:", customerData.id);
+        console.log("[useCustomerByAccessCode] Customer Name:", customerData.name);
+        
+        return customerData;
+      } catch (error: any) {
+        console.error("[useCustomerByAccessCode] ❌ Error fetching customer:", error);
+        console.error("[useCustomerByAccessCode] Error code:", error.code);
+        console.error("[useCustomerByAccessCode] Error message:", error.message);
+        throw error;
+      }
     },
     enabled: !!accessCode,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 1,
   });
 }
 
@@ -143,10 +166,25 @@ export function useDeleteCustomer() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // First, delete all credits associated with this customer
+      const creditsQuery = query(
+        collection(db, "credits"),
+        where("customerId", "==", id)
+      );
+      const creditsSnapshot = await getDocs(creditsQuery);
+      
+      // Delete all credits
+      const deleteCreditPromises = creditsSnapshot.docs.map((creditDoc) =>
+        deleteDoc(creditDoc.ref)
+      );
+      await Promise.all(deleteCreditPromises);
+
+      // Then delete the customer
       await deleteDoc(doc(db, "customers", id));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["credits"] });
     },
   });
 }
@@ -238,26 +276,120 @@ export function useCreditIncreases() {
 
 // Public hooks for customer portal (no authentication required)
 export function usePublicCredits(customerId: string | null) {
-  return useQuery<Credit[]>({
+  console.log("[usePublicCredits] Hook called with customerId:", customerId);
+  console.log("[usePublicCredits] Hook enabled:", !!customerId);
+  
+  const queryResult = useQuery<Credit[]>({
     queryKey: ["publicCredits", customerId],
     queryFn: async () => {
-      if (!customerId) return [];
+      console.log("[usePublicCredits] ========== queryFn CALLED ==========");
+      console.log("[usePublicCredits] queryFn called with customerId:", customerId);
       
-      const q = query(
-        collection(db, "credits"),
-        where("customerId", "==", customerId)
-      );
+      if (!customerId) {
+        console.log("[usePublicCredits] No customerId provided in queryFn");
+        return [];
+      }
       
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Credit));
+      try {
+        console.log("[usePublicCredits] ========== START FETCHING CREDITS ==========");
+        console.log("[usePublicCredits] Fetching credits for customerId:", customerId);
+        console.log("[usePublicCredits] CustomerId type:", typeof customerId);
+        
+        const q = query(
+          collection(db, "credits"),
+          where("customerId", "==", customerId)
+        );
+        
+        console.log("[usePublicCredits] Query created, executing getDocs...");
+        const querySnapshot = await getDocs(q);
+        console.log("[usePublicCredits] Query snapshot received");
+        console.log("[usePublicCredits] Query snapshot size:", querySnapshot.size);
+        console.log("[usePublicCredits] Query snapshot empty:", querySnapshot.empty);
+        
+        if (querySnapshot.empty) {
+          console.log("[usePublicCredits] ⚠️ Query returned empty results");
+          console.log("[usePublicCredits] This could mean:");
+          console.log("[usePublicCredits] 1. No credits exist for this customerId");
+          console.log("[usePublicCredits] 2. Firestore rules are blocking the query");
+          console.log("[usePublicCredits] 3. The customerId doesn't match any credits");
+          
+          // Try to get all credits to see if any exist (for debugging only)
+          try {
+            const allCreditsQuery = query(collection(db, "credits"));
+            const allCreditsSnapshot = await getDocs(allCreditsQuery);
+            console.log("[usePublicCredits] DEBUG: Total credits in database:", allCreditsSnapshot.size);
+            if (allCreditsSnapshot.size > 0) {
+              console.log("[usePublicCredits] DEBUG: Sample credit customerIds:", 
+                allCreditsSnapshot.docs.slice(0, 3).map(doc => ({
+                  id: doc.id,
+                  customerId: doc.data().customerId,
+                  customerName: doc.data().customerName,
+                }))
+              );
+            }
+          } catch (debugError) {
+            console.log("[usePublicCredits] DEBUG: Could not fetch all credits (expected if rules block it):", debugError);
+          }
+          
+          return [];
+        }
+        
+        const credits = querySnapshot.docs.map((doc, index) => {
+          const data = doc.data();
+          console.log(`[usePublicCredits] Credit ${index + 1} data:`, {
+            id: doc.id,
+            customerId: data.customerId,
+            customerName: data.customerName,
+            amount: data.amount,
+            remainingAmount: data.remainingAmount,
+          });
+          return {
+            id: doc.id,
+            ...data,
+          } as Credit;
+        });
+        
+        console.log(`[usePublicCredits] ✅ Found ${credits.length} credits for customer ${customerId}`);
+        console.log("[usePublicCredits] Credits details:", credits);
+        console.log("[usePublicCredits] ========== END FETCHING CREDITS ==========");
+        return credits;
+      } catch (error: any) {
+        console.error("[usePublicCredits] ❌ ========== ERROR FETCHING CREDITS ==========");
+        console.error("[usePublicCredits] Error fetching credits:", error);
+        console.error("[usePublicCredits] Error code:", error.code);
+        console.error("[usePublicCredits] Error message:", error.message);
+        console.error("[usePublicCredits] Error stack:", error.stack);
+        if (error.code === "permission-denied") {
+          console.error("[usePublicCredits] ⚠️ PERMISSION DENIED - Check Firestore security rules!");
+          console.error("[usePublicCredits] The rules might be blocking public access to credits");
+        }
+        console.error("[usePublicCredits] ============================================");
+        // Return empty array on error instead of throwing to prevent UI crash
+        return [];
+      }
     },
     enabled: !!customerId,
-    initialData: [],
+    // Remove initialData to force the query to run
+    // initialData: [],
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 1,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
+  
+  // Debug query state
+  useEffect(() => {
+    console.log("[usePublicCredits] Query state:", {
+      isLoading: queryResult.isLoading,
+      isFetching: queryResult.isFetching,
+      isError: queryResult.isError,
+      error: queryResult.error,
+      data: queryResult.data,
+      status: queryResult.status,
+    });
+  }, [queryResult.isLoading, queryResult.isFetching, queryResult.isError, queryResult.data, queryResult.status]);
+  
+  return queryResult;
 }
 
 export function usePublicPayments(customerId: string | null) {

@@ -12,9 +12,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from "@/hooks/useFirestore";
+import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer, useCredits } from "@/hooks/useFirestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { CreditBlockedAlert } from "@/components/CreditBlockedAlert";
+import { DeleteCustomerAlert } from "@/components/DeleteCustomerAlert";
 
 const formSchema = insertCustomerSchema.extend({
   email: z.string().email().optional().or(z.literal("")),
@@ -29,6 +31,7 @@ export default function Customers() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const { data: customers, loading } = useCustomers();
+  const { data: credits } = useCredits();
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
@@ -37,6 +40,10 @@ export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [blockedAlertOpen, setBlockedAlertOpen] = useState(false);
+  const [blockedCustomer, setBlockedCustomer] = useState<{ name: string; amount: number } | null>(null);
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -107,18 +114,39 @@ export default function Customers() {
   };
 
   const handleDelete = async (customer: Customer) => {
-    if (!confirm(`Are you sure you want to delete ${customer.name}?`)) return;
+    // Check if customer has an unpaid credit (remainingAmount != 0)
+    const customerCredits = credits?.filter(credit => credit.customerId === customer.id) || [];
+    const unpaidCredit = customerCredits.find(credit => credit.remainingAmount !== 0);
+
+    if (unpaidCredit) {
+      // Show spectacular alert instead of simple toast
+      setBlockedCustomer({
+        name: customer.name,
+        amount: unpaidCredit.remainingAmount,
+      });
+      setBlockedAlertOpen(true);
+      return;
+    }
+
+    // Show spectacular delete confirmation alert
+    setCustomerToDelete(customer);
+    setDeleteAlertOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!customerToDelete) return;
 
     try {
-      await deleteCustomer.mutateAsync(customer.id);
+      await deleteCustomer.mutateAsync(customerToDelete.id);
       toast({
-        title: "Customer deleted",
-        description: "Customer has been removed successfully.",
+        title: t("customers.customerDeleted"),
+        description: t("customers.customerDeletedDesc"),
       });
+      setCustomerToDelete(null);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to delete customer",
+        title: t("errors.error"),
+        description: t("customers.deleteError"),
         variant: "destructive",
       });
     }
@@ -434,6 +462,30 @@ export default function Customers() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Spectacular Credit Blocked Alert */}
+      {blockedCustomer && (
+        <CreditBlockedAlert
+          open={blockedAlertOpen}
+          onOpenChange={setBlockedAlertOpen}
+          customerName={blockedCustomer.name}
+          remainingAmount={blockedCustomer.amount}
+        />
+      )}
+
+      {/* Spectacular Delete Confirmation Alert */}
+      {customerToDelete && (
+        <DeleteCustomerAlert
+          open={deleteAlertOpen}
+          onOpenChange={(open) => {
+            setDeleteAlertOpen(open);
+            if (!open) setCustomerToDelete(null);
+          }}
+          customerName={customerToDelete.name}
+          onConfirm={handleConfirmDelete}
+          isDeleting={deleteCustomer.isPending}
+        />
+      )}
     </div>
   );
 }

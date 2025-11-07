@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,27 +13,147 @@ import { calculateCreditStatus } from "@/lib/creditUtils";
 import { Badge } from "@/components/ui/badge";
 
 export default function CustomerTrack() {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const { toast } = useToast();
   const { t } = useLanguage();
   const [accessCode, setAccessCode] = useState("");
   const [enteredCode, setEnteredCode] = useState<string | null>(null);
 
   // Get access code from URL if exists
-  const urlParts = location.split("/");
-  const accessCodeFromUrl = urlParts[urlParts.length - 1];
+  // Extract from location path: /customer-track/CUST-XXXX-XXXX-XXXX
+  useEffect(() => {
+    console.log("[CustomerTrack] Location changed:", location);
+    const urlParts = location.split("/").filter(Boolean); // Remove empty strings
+    console.log("[CustomerTrack] URL parts:", urlParts);
+    const trackIndex = urlParts.indexOf("customer-track");
+    console.log("[CustomerTrack] Track index:", trackIndex);
+    
+    if (trackIndex !== -1 && trackIndex < urlParts.length - 1) {
+      const codeFromUrl = urlParts[trackIndex + 1];
+      console.log("[CustomerTrack] Code from URL:", codeFromUrl);
+      // Validate that it looks like an access code
+      if (codeFromUrl && codeFromUrl.startsWith("CUST-")) {
+        console.log("[CustomerTrack] Valid access code found, setting enteredCode");
+        setEnteredCode(codeFromUrl);
+      } else {
+        console.log("[CustomerTrack] Code doesn't start with CUST-, ignoring");
+      }
+    } else {
+      console.log("[CustomerTrack] No access code found in URL");
+    }
+  }, [location]);
+
+  // Extract access code from URL for immediate use
+  const urlParts = location.split("/").filter(Boolean);
+  const trackIndex = urlParts.indexOf("customer-track");
+  const accessCodeFromUrl = trackIndex !== -1 && trackIndex < urlParts.length - 1 
+    ? urlParts[trackIndex + 1] 
+    : null;
+  
   const hasAccessCodeInUrl = accessCodeFromUrl && 
-    accessCodeFromUrl !== "customer-track" && 
-    accessCodeFromUrl !== "access" &&
     accessCodeFromUrl.startsWith("CUST-");
 
   // Use access code from URL or entered code
   const activeAccessCode = hasAccessCodeInUrl ? accessCodeFromUrl : (enteredCode || null);
-  const { data: customer, isLoading: customerLoading } = useCustomerByAccessCode(activeAccessCode);
+  
+  console.log("[CustomerTrack] Active access code:", activeAccessCode);
+  console.log("[CustomerTrack] Has access code in URL:", hasAccessCodeInUrl);
+  console.log("[CustomerTrack] Entered code:", enteredCode);
+  
+  const { data: customer, isLoading: customerLoading, error: customerError } = useCustomerByAccessCode(activeAccessCode);
+  
+  // Debug: Log customer ID before fetching credits
+  useEffect(() => {
+    if (customer?.id) {
+      console.log("[CustomerTrack] About to fetch credits for customer ID:", customer.id);
+    } else {
+      console.log("[CustomerTrack] No customer ID available yet, cannot fetch credits");
+    }
+  }, [customer?.id]);
   
   // Get credit for this customer (public access, no authentication required)
-  const { data: credits, isLoading: creditsLoading } = usePublicCredits(customer?.id || null);
-  const customerCredit = customer && credits && credits.length > 0 ? credits[0] : null;
+  const { data: credits, isLoading: creditsLoading, error: creditsError } = usePublicCredits(customer?.id || null);
+  
+  // Debug: Log when credits query is enabled/disabled
+  useEffect(() => {
+    console.log("[CustomerTrack] Credits query enabled:", !!customer?.id);
+    console.log("[CustomerTrack] Customer ID for credits query:", customer?.id || "null");
+  }, [customer?.id]);
+  
+  // Debug logging (remove in production)
+  useEffect(() => {
+    console.log("[CustomerTrack] ========== DEBUG INFO ==========");
+    console.log("[CustomerTrack] Active Access Code:", activeAccessCode);
+    console.log("[CustomerTrack] Customer Loading:", customerLoading);
+    console.log("[CustomerTrack] Customer Error:", customerError);
+    
+    if (customer) {
+      console.log("[CustomerTrack] ✅ Customer found:", customer);
+      console.log("[CustomerTrack] Customer ID:", customer.id);
+      console.log("[CustomerTrack] Customer Name:", customer.name);
+      console.log("[CustomerTrack] Customer Access Code:", customer.accessCode);
+    } else {
+      console.log("[CustomerTrack] ❌ No customer found");
+    }
+    
+    console.log("[CustomerTrack] Credits Loading:", creditsLoading);
+    console.log("[CustomerTrack] Credits Error:", creditsError);
+    
+    if (credits) {
+      console.log("[CustomerTrack] ✅ Credits found:", credits);
+      console.log("[CustomerTrack] Credits count:", credits.length);
+      credits.forEach((credit, index) => {
+        console.log(`[CustomerTrack] Credit ${index + 1}:`, {
+          id: credit.id,
+          customerId: credit.customerId,
+          amount: credit.amount,
+          remainingAmount: credit.remainingAmount,
+          status: credit.status,
+          dueDate: credit.dueDate,
+        });
+      });
+    } else {
+      console.log("[CustomerTrack] ❌ No credits found or credits is null/undefined");
+    }
+    
+    console.log("[CustomerTrack] ================================");
+  }, [customer, credits, creditsError, customerError, customerLoading, creditsLoading, activeAccessCode]);
+  
+  // Get the most recent credit for this customer
+  const customerCredit = customer && credits && credits.length > 0 
+    ? credits.sort((a, b) => b.createdAt - a.createdAt)[0] 
+    : null;
+  
+  // Additional debug logging for customerCredit
+  useEffect(() => {
+    console.log("[CustomerTrack] ========== CUSTOMER CREDIT DEBUG ==========");
+    if (customerCredit) {
+      console.log("[CustomerTrack] ✅ Customer Credit found:", customerCredit);
+      console.log("[CustomerTrack] Credit ID:", customerCredit.id);
+      console.log("[CustomerTrack] Credit Customer ID:", customerCredit.customerId);
+      console.log("[CustomerTrack] Credit Amount:", customerCredit.amount);
+      console.log("[CustomerTrack] Credit Remaining Amount:", customerCredit.remainingAmount);
+      console.log("[CustomerTrack] Credit Status:", customerCredit.status);
+      console.log("[CustomerTrack] Credit Due Date:", customerCredit.dueDate);
+      console.log("[CustomerTrack] Credit Created At:", customerCredit.createdAt);
+    } else {
+      console.log("[CustomerTrack] ❌ No customer credit found");
+      if (customer) {
+        console.log("[CustomerTrack] Customer exists but no credit found");
+        console.log("[CustomerTrack] Customer ID:", customer.id);
+        console.log("[CustomerTrack] Credits array:", credits);
+        console.log("[CustomerTrack] Credits length:", credits?.length || 0);
+        console.log("[CustomerTrack] Credits is null:", credits === null);
+        console.log("[CustomerTrack] Credits is undefined:", credits === undefined);
+        if (credits && credits.length === 0) {
+          console.log("[CustomerTrack] ⚠️ Credits array is empty");
+        }
+      } else {
+        console.log("[CustomerTrack] No customer found, cannot get credit");
+      }
+    }
+    console.log("[CustomerTrack] ==========================================");
+  }, [customerCredit, customer, credits]);
   
   // Get transactions (public access, no authentication required)
   const { data: payments } = usePublicPayments(customer?.id || null);

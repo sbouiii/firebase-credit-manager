@@ -12,12 +12,6 @@ match /databases/{database}/documents {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper function to check if customer has accessCode
-    function customerHasAccessCode(customerId) {
-      return exists(/databases/$(database)/documents/customers/$(customerId)) &&
-             get(/databases/$(database)/documents/customers/$(customerId)).data.accessCode != null;
-    }
-
     // Customers collection
     match /customers/{customerId} {
       // Users can only read/write their own customers
@@ -25,7 +19,6 @@ match /databases/{database}/documents {
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       // Allow public read by accessCode (for customer portal - query by accessCode)
-      // Note: This allows customers to read their own data using their accessCode
       allow read: if resource.data.accessCode != null;
     }
 
@@ -35,11 +28,14 @@ match /databases/{database}/documents {
       allow read, write: if isOwner(resource.data.userId);
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // Allow public read if customer has accessCode (for customer portal)
-      // IMPORTANT: This rule works for both single document reads and queries
-      // The get() function works in read rules but may have limitations in list queries
-      allow read: if resource.data.customerId != null &&
-                     customerHasAccessCode(resource.data.customerId);
+      // Allow public read for queries (for customer portal)
+      // IMPORTANT: This allows public queries - less secure but necessary for customer portal
+      // The query will be filtered by customerId in the application code
+      allow list: if true;
+      // Allow single document read if customer has accessCode
+      allow get: if resource.data.customerId != null &&
+                    exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) &&
+                    get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
 
     // Payments collection
@@ -48,9 +44,12 @@ match /databases/{database}/documents {
       allow read, write: if isOwner(resource.data.userId);
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // Allow public read if customer has accessCode (for customer portal)
-      allow read: if resource.data.customerId != null &&
-                     customerHasAccessCode(resource.data.customerId);
+      // Allow public read for queries (for customer portal)
+      allow list: if true;
+      // Allow single document read if customer has accessCode
+      allow get: if resource.data.customerId != null &&
+                    exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) &&
+                    get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
 
     // Credit Increases collection
@@ -59,9 +58,12 @@ match /databases/{database}/documents {
       allow read, write: if isOwner(resource.data.userId);
       // Allow create if the userId matches the authenticated user
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // Allow public read if customer has accessCode (for customer portal)
-      allow read: if resource.data.customerId != null &&
-                     customerHasAccessCode(resource.data.customerId);
+      // Allow public read for queries (for customer portal)
+      allow list: if true;
+      // Allow single document read if customer has accessCode
+      allow get: if resource.data.customerId != null &&
+                    exists(/databases/$(database)/documents/customers/$(resource.data.customerId)) &&
+                    get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.accessCode != null;
     }
 
     // Stores collection

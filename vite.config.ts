@@ -31,7 +31,19 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Copy public directory files to output
+    copyPublicDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'chart-vendor': ['chart.js', 'react-chartjs-2'],
+          'ui-vendor': ['framer-motion', 'lucide-react'],
+        },
+      },
+    },
   },
+  publicDir: path.resolve(import.meta.dirname, "public"),
   server: {
     fs: {
       strict: true,
